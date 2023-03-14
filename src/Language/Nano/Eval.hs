@@ -167,12 +167,69 @@ exitError (Error msg) = return (VErr msg)
 --------------------------------------------------------------------------------
 eval :: Env -> Expr -> Value
 --------------------------------------------------------------------------------
-eval = error "TBD:eval"
+eval env (EInt num)         = VInt (num)
+eval env (EBool bool)       = VBool (bool)
+eval env (ENil)             = VNil
+eval env (EVar id)          = lookupId id env
+eval env (EBin binop e1 e2) = evalOp binop (eval env e1) (eval env e2)
+
+eval env (EIf e1 e2 e3)     = if ((eval env e1) == (VBool True))  then (eval env e2) else
+                              if ((eval env e1) == (VBool False)) then (eval env e3) else
+                              throw (Error ("type error"))
+
+eval env (ELet id e1 e2)    = eval ((id, eval env e1) : env) e2
+
+eval env (ELam id e1)       = VClos env id e1
+
+
+-- eval env (EApp e1 e2)         =
+--     let arg                   = eval env e2
+--         (VPrim func)          = func (eval env e1)
+--         (VClos env' id eBody) = eval env e1
+--         _                     = throw (Error("type error: EApp"))
+--         in eval (((id, arg) : env') ++ env) eBody
+
+eval env (EApp e1 e2)       = 
+   case eval env e1 of
+     (VClos envC idC eC)   -> eval (((idC, eval env e2) : envC) ++ env) eC
+     (VPrim func)          -> func (eval env e2)
+     otherwise             -> throw (Error ("ERROR"))
 
 --------------------------------------------------------------------------------
 evalOp :: Binop -> Value -> Value -> Value
 --------------------------------------------------------------------------------
-evalOp = error "TBD:evalOp"
+evalOp binop (VInt num1) (VInt num2)
+  | binop == Plus  = VInt (num1 + num2)
+  | binop == Minus = VInt (num1 - num2)
+  | binop == Mul   = VInt (num1 * num2)
+  | binop == Div   = VInt (num1 `div` num2)
+  | binop == Eq    = if(num1 == num2)  then VBool (True) else VBool (False)
+  | binop == Ne    = if(num1 /= num2)  then VBool (True) else VBool (False)
+  | binop == Lt    = if(num1 < num2)   then VBool (True) else VBool (False)
+  | binop == Le    = if(num1 <= num2)  then VBool (True) else VBool (False)
+  | otherwise      = throw (Error ("type error: binop"))
+
+evalOp binop (VBool bool1) (VBool bool2)
+  | binop == Plus  = throw (Error ("type error: binop"))
+  | binop == Minus = throw (Error ("type error: binop"))
+  | binop == Mul   = throw (Error ("type error: binop"))
+  | binop == Div   = throw (Error ("type error: binop"))
+  | binop == Eq   = if(bool1 == bool2)  then VBool(True) else VBool (False)
+  | binop == Ne   = if(bool1 /= bool2)  then VBool(True) else VBool (False)
+  | binop == And  = if((bool1 == True) && (bool2 == True))   then VBool (True) else VBool (False)
+  | binop == Or   = if((bool1 == True) || (bool2 == True))   then VBool (True) else VBool (False)
+  | otherwise     = throw (Error ("type error: binop"))
+
+evalOp _ (VInt num1) (VBool bool1) = throw (Error ("type error: binop"))
+evalOp _ (VBool bool1) (VInt num1) = throw (Error ("type error: binop"))
+
+evalOp _ (VPrim func) _ = throw (Error ("type error: binop"))
+evalOp _ _ (VPrim func) = throw (Error ("type error: binop"))
+
+evalOp Cons val1 val2   = VPair val1 val2
+
+evalOp Eq val1 val2     = VBool (val1 == val2)
+
 
 --------------------------------------------------------------------------------
 -- | `lookupId x env` returns the most recent
@@ -191,12 +248,15 @@ evalOp = error "TBD:evalOp"
 --------------------------------------------------------------------------------
 lookupId :: Id -> Env -> Value
 --------------------------------------------------------------------------------
-lookupId = error "TBD:lookupId"
+lookupId id []            = throw (Error ("unbound variable: " ++ id))
+lookupId id ((x1, x2):xs) = if (x1 == id)       then x2
+                            else lookupId id xs
+
 
 prelude :: Env
 prelude =
-  [ -- HINT: you may extend this "built-in" environment
-    -- with some "operators" that you find useful...
+  [ ("head", VPrim (\(VPair a b) -> a))
+    , ("tail", VPrim (\(VPair a b) -> b))
   ]
 
 env0 :: Env
